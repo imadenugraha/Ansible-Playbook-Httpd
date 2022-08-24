@@ -1,0 +1,66 @@
+---
+- name: Install Httpd for Web Server
+  hosts: [srv1 srv2]
+  become: yes
+
+  tasks:
+  - name: Update Server
+    ansible.builtin.yum:
+      update_cache: yes
+      state: latest
+  
+  - name: Install httpd Web Server
+    ansible.builtin.yum:
+      name:
+        - httpd
+      state: latest
+
+  - name: Create Site Directory
+    ansible.builtin.file:
+      path: /var/www/test
+      mode: '0755'
+      state: directory
+      owner: "{{ ansible_user }}"
+      group: "{{ ansible_user }}"
+
+  - name: Copy Web HTML to Site Directory
+    ansible.builtin.copy:
+      src: test/index.html
+      dest: /var/www/test
+      mode: '0755'
+
+  - name: Remove Httpd Default Configuration
+    ansible.builtin.file:
+      path: /etc/httpd/conf.d/welcome.conf
+      state: absent
+
+  - name: Copy Configuration to Httpd Directory
+    ansible.builtin.template:
+      src: test.conf
+      dest: /etc/httpd/conf.d/
+      mode: '0644'
+      owner: root
+      group: root
+    notify:
+      - restart-httpd
+
+  - name: Open port on Firewall
+    ansible.posix.firewalld:
+      service: "{{ item }}"
+      state: enabled
+      permanent: yes
+      immediate: yes
+    with_items:
+      - http
+      - https
+  
+  - name: Reload Firewall
+    ansible.builtin.service:
+      name: firewalld
+      state: restarted
+    
+  handlers:
+    - name: restart-httpd
+      ansible.builtin.service:
+        name: httpd
+        state: restarted
